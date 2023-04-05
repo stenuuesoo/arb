@@ -9,30 +9,52 @@ binance = ccxt.binance({
     "secret": api_secret,
 })
 
-def arbitrage(symbol1, symbol2, threshold=0.01):
+def triangular_arbitrage(symbols, threshold=0.01):
+    trading_fee = 0.001  # Binance trading fee (0.1%)
+    sleep_interval = 5  # Time interval between checks in seconds
+    print_interval = 30  # Time interval between printing threshold in seconds
+
+    print("Serving script... ")
+
+    counter = 0  # Initialize counter
+
     while True:
         try:
-            ticker1 = binance.fetch_ticker(symbol1)
-            ticker2 = binance.fetch_ticker(symbol2)
+            tickers = {}
+            for symbol in symbols:
+                tickers[symbol] = binance.fetch_ticker(symbol)
 
-            bid1 = ticker1['bid']
-            ask1 = ticker1['ask']
-            bid2 = ticker2['bid']
-            ask2 = ticker2['ask']
+            # Print ticker data for debugging
+            print("Ticker data:", tickers)
 
-            if bid1 / ask2 > 1 + threshold:
-                print(f"Arbitrage opportunity: Buy {symbol2} and sell {symbol1}")
-                print(f"Buy price: {ask2}, Sell price: {bid1}")
+            # Calculate arbitrage opportunity
+            arb1 = (1 / tickers[symbols[0]]['ask']) * tickers[symbols[2]]['bid'] * tickers[symbols[1]]['bid']
+            arb2 = (1 / tickers[symbols[1]]['ask']) * tickers[symbols[0]]['bid'] * tickers[symbols[2]]['ask']
+            
+            # Print intermediate values for debugging
+            print(f"arb1: {arb1}, arb2: {arb2}")
+            
+            if arb1 > 1 + threshold:
+                profit = arb1 * (1 - trading_fee) * (1 - trading_fee) - 1
+                print(f"Arbitrage opportunity: Buy {symbols[1]} with {symbols[0]}, then buy {symbols[2]} with {symbols[1]}, and sell {symbols[2]} for {symbols[0]}.")
+                print(f"Estimated profit (including fees): {profit * 100:.2f}%")
+                print(f"arb1: {arb1}, trading_fee: {trading_fee}, profit: {profit}")
 
-            if bid2 / ask1 > 1 + threshold:
-                print(f"Arbitrage opportunity: Buy {symbol1} and sell {symbol2}")
-                print(f"Buy price: {ask1}, Sell price: {bid2}")
+            if arb2 > 1 + threshold:
+                profit = arb2 * (1 - trading_fee) * (1 - trading_fee) - 1
+                print(f"Arbitrage opportunity: Buy {symbols[2]} with {symbols[0]}, then buy {symbols[1]} with {symbols[2]}, and sell {symbols[1]} for {symbols[0]}.")
+                print(f"Estimated profit (including fees): {profit * 100:.2f}%")
+                print(f"arb2: {arb2}, trading_fee: {trading_fee}, profit: {profit}")
+
+            if counter * sleep_interval >= print_interval:
+                print(f"Current threshold: {threshold * 100:.2f}%")
+                counter = 0
 
         except Exception as e:
             print(f"Error: {e}")
 
-        time.sleep(5)
+        time.sleep(sleep_interval)
+        counter += 1
 
 if __name__ == "__main__":
-    # Replace 'BTC/USDT' and 'ETH/USDT' with the trading pairs you want to monitor.
-    arbitrage("BTC/USDT", "ETH/USDT", threshold=0.01)
+    triangular_arbitrage(["BTC/USDT", "ETH/USDT", "ETH/BTC"], threshold=0.01)
